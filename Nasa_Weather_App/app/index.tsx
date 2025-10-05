@@ -1,171 +1,173 @@
-// app/index.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Platform } from "react-native";
-import * as Location from "expo-location";
+import React, { useMemo, useState } from "react";
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import Slider from "@react-native-community/slider";
+// If you use Expo Router, keep this import; otherwise delete it.
+import { router } from "expo-router";
 
-type Profile = {
-  name: string;
-  age: number;
-  gender: string;
-  race: string;
-  allergies: string;
-  skinTone: number; // 0..1
-};
-
-// stub – replace with your real profile context later
-const demoProfile: Profile = {
-  name: "Demo User",
-  age: 18,
-  gender: "female",
-  race: "asian",
-  allergies: "pollen, dust",
-  skinTone: 0.35,
-};
-
-type Weather = {
-  tempF: number;
-  condition: string;
-  hourly: number[]; // next 12 hours
-  alerts: string[];
-};
-
-// TODO: swap for real provider (Open-Meteo/WeatherKit/Tomorrow)
-async function fetchWeather(lat: number, lon: number): Promise<Weather> {
-  // mock so screen renders immediately
-  return {
-    tempF: 78,
-    condition: "Clear",
-    hourly: [54, 61, 66, 70, 73, 74, 75, 77, 79, 78, 72, 68],
-    alerts: [],
-  };
-}
+type HourDatum = { hourLabel: string; tempF: number; condition: "Clear" | "Clouds" | "Rain" | "Snow" | "Thunder" };
 
 const Colors = {
   bg: "#FAFAFA",
+  card: "#FFFFFF",
   text: "#1F1F1F",
   subtext: "#6B7280",
-  card: "#FFFFFF",
-  tint: "#1F2937",     // charcoal (numbers)
-  accent: "#EE4444",   // red orb accent
   border: "#E5E7EB",
+  tint: "#1F2937",     // dark charcoal for big numbers
+  accent: "#EE4444",   // red orb accent
   good: "#10B981",
 };
 
-export default function HomeScreen() {
-  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [wx, setWx] = useState<Weather | null>(null);
-  const [loading, setLoading] = useState(true);
+const HOURLY: HourDatum[] = [
+  { hourLabel: "Now", tempF: 74, condition: "Clear" },
+  { hourLabel: "1h", tempF: 75, condition: "Clear" },
+  { hourLabel: "2h", tempF: 77, condition: "Clear" },
+  { hourLabel: "3h", tempF: 79, condition: "Clear" },
+  { hourLabel: "4h", tempF: 78, condition: "Clouds" },
+  { hourLabel: "5h", tempF: 73, condition: "Clouds" },
+  { hourLabel: "6h", tempF: 68, condition: "Rain" },
+];
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setLoading(false);
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({});
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      setCoords({ lat, lon });
-      const data = await fetchWeather(lat, lon);
-      setWx(data);
-      setLoading(false);
-    })();
-  }, []);
+export default function Landing() {
+  const [idx, setIdx] = useState(0);
 
-  const advice = useMemo(() => {
-    if (!wx) return "";
-    const out: string[] = [];
-    out.push(wx.tempF >= 75 ? "T-shirt" : wx.tempF >= 60 ? "Light jacket" : "Warm layers");
-    if (demoProfile.allergies.toLowerCase().includes("pollen")) out.push("Allergy med");
-    if (wx.condition.toLowerCase().includes("clear") && demoProfile.skinTone < 0.5) out.push("SPF");
-    return out.join(" · ");
-  }, [wx]);
+  const hour = HOURLY[idx];
+  const orbColor = useMemo(() => {
+    switch (hour.condition) {
+      case "Clear": return Colors.accent;          // red/orange
+      case "Clouds": return "#9CA3AF";             // gray
+      case "Rain": return "#3B82F6";               // blue
+      case "Snow": return "#93C5FD";
+      case "Thunder": return "#A855F7";
+    }
+  }, [hour]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: Colors.bg }} contentContainerStyle={{ padding: 20 }}>
-      <View style={[styles.card, { alignItems: "center", paddingTop: 24 }]}>
-        {/* Red orb */}
-        <View style={styles.orb} />
-        <Text style={styles.bigTemp}>
-          {loading ? "" : wx ? `${wx.tempF}` : "--"}
-        </Text>
-        <Text style={styles.condition}>{wx ? wx.condition : loading ? "" : "—"}</Text>
-        <Text style={styles.subtitle}>Swipe for the forecast</Text>
+    <SafeAreaView style={styles.root}>
+      {/* top row: profile */}
+      <TouchableOpacity
+        accessibilityLabel="Open profile"
+        style={styles.profileBtn}
+        onPress={() => router.push?.("/profile")}
+      >
+        <View style={styles.profileCircle}>
+          <Text style={{ color: Colors.text, fontWeight: "700" }}>🙂</Text>
+        </View>
+        <Text style={styles.profileText}>profile</Text>
+      </TouchableOpacity>
+
+      {/* time slider */}
+      <View style={styles.sliderCard}>
+        <Text style={styles.sliderLabel}>Time</Text>
+        <Slider
+          value={idx}
+          minimumValue={0}
+          maximumValue={HOURLY.length - 1}
+          step={1}
+          minimumTrackTintColor={Colors.tint}
+          maximumTrackTintColor={Colors.border}
+          thumbTintColor={Colors.tint}
+          onValueChange={(v) => setIdx(v as number)}
+        />
+        <View style={styles.sliderFooter}>
+          <Text style={styles.sliderTick}>{HOURLY[0].hourLabel}</Text>
+          <Text style={styles.sliderTick}>{HOURLY[Math.floor((HOURLY.length - 1) / 2)].hourLabel}</Text>
+          <Text style={styles.sliderTick}>{HOURLY[HOURLY.length - 1].hourLabel}</Text>
+        </View>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Today’s advice</Text>
-        {loading ? <ActivityIndicator /> : <Text style={styles.body}>{advice || "We’ll advise once weather loads."}</Text>}
+      {/* big circle / weather image placeholder */}
+      <View style={[styles.orbWrap]}>
+        <View style={[styles.orb, { backgroundColor: orbColor }]} />
+        <Text style={styles.bigTemp}>{hour.tempF}</Text>
+        <Text style={styles.condition}>{hour.condition}</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Hourly (next 12h)</Text>
-        {wx ? (
-          <View style={styles.hourRow}>
-            {wx.hourly.map((t, i) => (
-              <View key={i} style={styles.hourPill}>
-                <Text style={styles.hourText}>{t}°</Text>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.subtle}>Waiting for forecast…</Text>
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Location</Text>
-        <Text style={styles.mono}>
-          {coords ? `lat ${coords.lat.toFixed(4)}, lon ${coords.lon.toFixed(4)}` : "Location not granted"}
-        </Text>
-      </View>
-    </ScrollView>
+      {/* plan button */}
+      <TouchableOpacity
+        style={styles.planBtn}
+        onPress={() => router.push?.("/planner")}
+        activeOpacity={0.9}
+      >
+        <Text style={styles.planText}>Plan an Event</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  root: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    paddingHorizontal: 20,
+    paddingTop: Platform.select({ ios: 8, android: 24 }),
+  },
+
+  // profile
+  profileBtn: {
+    alignSelf: "flex-end",
+    alignItems: "center",
+  },
+  profileCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.card,
-    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileText: { color: Colors.subtext, fontSize: 12, marginTop: 4 },
+
+  // slider
+  sliderCard: {
+    marginTop: 8,
+    backgroundColor: Colors.card,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: 16,
+    padding: 14,
   },
+  sliderLabel: { color: Colors.subtext, fontSize: 13, marginBottom: 6 },
+  sliderFooter: {
+    marginTop: 6,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  sliderTick: { color: Colors.subtext, fontSize: 12 },
+
+  // orb + readouts
+  orbWrap: { alignItems: "center", marginTop: 28, marginBottom: 24 },
   orb: {
-    width: 140,
-    height: 140,
-    borderRadius: 999,
-    backgroundColor: Colors.accent,
-    marginBottom: 12,
-    shadowColor: Colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
     elevation: 10,
+    marginBottom: 10,
   },
   bigTemp: {
     fontSize: 120,
     fontWeight: "800",
     color: Colors.tint,
     letterSpacing: -4,
-    lineHeight: 120,
+    lineHeight: 118,
   },
-  condition: { fontSize: 28, fontWeight: "800", color: Colors.text, marginTop: -6, marginBottom: 8, textAlign: "center" },
-  subtitle: { color: Colors.subtext, fontSize: 14 },
-  sectionTitle: { fontSize: 18, fontWeight: "700", color: Colors.text, marginBottom: 8 },
-  body: { color: Colors.text, fontSize: 15 },
-  subtle: { color: Colors.subtext, fontSize: 13 },
-  hourRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  hourPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: "#fff",
+  condition: { fontSize: 22, fontWeight: "700", color: Colors.text, marginTop: -6 },
+
+  // plan button
+  planBtn: {
+    marginTop: "auto",
+    marginBottom: 20,
+    backgroundColor: Colors.card,
+    borderWidth: 2,
+    borderColor: Colors.tint,
+    borderRadius: 20,
+    paddingVertical: 18,
+    alignItems: "center",
   },
-  hourText: { color: Colors.text, fontWeight: "600" },
-  mono: { fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }) as any, color: Colors.text },
+  planText: { color: Colors.tint, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
 });
